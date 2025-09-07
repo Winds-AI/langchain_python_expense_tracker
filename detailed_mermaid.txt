@@ -1,0 +1,182 @@
+flowchart TD
+    %% Main entry points
+    Start([User Opens App]) --> InitializeApp
+    
+    %% App initialization
+    subgraph Initialization
+        InitializeApp[Initialize App] --> LoadCategories
+        LoadCategories[Load Categories] --> LoadExpenses
+        LoadExpenses[Load Expenses] --> SetupSessionState
+        SetupSessionState[Setup Session State] --> DisplayUI
+    end
+    
+    %% Main UI components
+    DisplayUI[Display Main UI] --> MainPage
+    DisplayUI --> Sidebar
+    
+    %% Voice input flow
+    subgraph VoiceInputFlow["Voice Input Flow"]
+        MainPage --> VoiceRecord[Record Voice Button]
+        VoiceRecord --> AudioCaptured{Audio Captured?}
+        AudioCaptured -->|Yes| TranscribeBtn[Transcribe Button]
+        AudioCaptured -->|No| NoAudioWarning[Show Warning]
+        
+        TranscribeBtn --> SetTranscribingFlag[Set is_transcribing=true]
+        SetTranscribingFlag --> ShowSpinner[Show Spinner]
+        ShowSpinner --> NormalizeMIME[Normalize MIME Type]
+        NormalizeMIME --> CallGeminiSTT[Call Gemini STT API]
+        
+        CallGeminiSTT --> TranscriptionSuccess{Success?}
+        TranscriptionSuccess -->|Yes| TranscriptReceived{Transcript Empty?}
+        TranscriptionSuccess -->|No| TranscriptionError[Show Error Message]
+        
+        TranscriptReceived -->|Not Empty| UpdateTextField[Update Text Field]
+        TranscriptReceived -->|Empty| NoTranscriptWarning[Show Warning]
+        
+        UpdateTextField --> ShowSuccessMsg[Show Success Message]
+        ShowSuccessMsg --> RerunUI[Rerun UI to Update]
+        
+        NoTranscriptWarning --> ResetTranscribingFlag
+        TranscriptionError --> ResetTranscribingFlag[Set is_transcribing=false]
+    end
+    
+    %% Text input and extraction flow
+    subgraph ExtractionFlow["Expense Extraction Flow"]
+        RerunUI --> TextInput[Text Input Field]
+        TextInput --> ExtractButton[Extract & Save Button]
+        ExtractButton --> TextExists{Text Exists?}
+        
+        TextExists -->|No| TextEmptyError[Show Error]
+        TextExists -->|Yes| GetProviderModel[Get Provider & Model]
+        
+        GetProviderModel --> CallExtractService[Call extract_and_save]
+        CallExtractService --> TryExtraction{Try Extraction}
+        
+        TryExtraction -->|Success| StoreResult[Store Result]
+        TryExtraction -->|Exception| HandleException[Create Error Result]
+        
+        StoreResult --> IsValid{Result Valid?}
+        HandleException --> StoreErrorResult[Store Error Result]
+        
+        IsValid -->|Yes| ReloadExpenses[Reload Expenses]
+        IsValid -->|No| DisplayInvalid[Show Invalid Result]
+        
+        ReloadExpenses --> ShowSuccess[Show Success Message]
+        ShowSuccess --> ClearInput[Clear Input]
+        
+        DisplayInvalid --> ShowMissingFields[Show Missing Fields]
+        StoreErrorResult --> DisplayError[Show Error Message]
+    end
+    
+    %% Category management flow
+    subgraph CategoryFlow["Category Management Flow"]
+        Sidebar --> CategoryManagement[Category Management]
+        CategoryManagement --> AddCategory[Add Category Form]
+        CategoryManagement --> ViewCategories[View Categories]
+        
+        AddCategory --> SubmitCategory[Submit New Category]
+        SubmitCategory --> CategoryExists{Category Exists?}
+        
+        CategoryExists -->|Yes| CategoryExistsError[Show Error]
+        CategoryExists -->|No| CreateCategory[Create Category]
+        
+        CreateCategory --> CategoryCreated{Success?}
+        CategoryCreated -->|Yes| UpdateCategoriesList[Update Categories]
+        CategoryCreated -->|No| CategoryCreateError[Show Error]
+        
+        UpdateCategoriesList --> CategorySuccess[Show Success]
+        
+        ViewCategories --> AddSubcategory[Add Subcategory]
+        ViewCategories --> DeleteCategory[Delete Category]
+        
+        AddSubcategory --> SubmitSubcategory[Submit Subcategory]
+        SubmitSubcategory --> SubcategoryExists{Subcategory Exists?}
+        
+        SubcategoryExists -->|Yes| SubcategoryExistsError[Show Error]
+        SubcategoryExists -->|No| CreateSubcategory[Create Subcategory]
+        
+        CreateSubcategory --> SubcategoryCreated{Success?}
+        SubcategoryCreated -->|Yes| UpdateSubcategoriesList[Update Subcategories]
+        SubcategoryCreated -->|No| SubcategoryCreateError[Show Error]
+        
+        DeleteCategory --> ConfirmDelete{Confirm?}
+        ConfirmDelete -->|Yes| DeleteCategoryService[Delete Category]
+        DeleteCategoryService --> CategoryDeleted{Success?}
+        CategoryDeleted -->|Yes| RefreshCategories[Refresh Categories]
+        CategoryDeleted -->|No| DeleteError[Show Error]
+    end
+    
+    %% Settings flow
+    subgraph SettingsFlow["Settings Flow"]
+        Sidebar --> SettingsSection[Settings Section]
+        SettingsSection --> ProviderSelection[Select AI Provider]
+        SettingsSection --> ModelSelection[Select Model]
+        
+        ProviderSelection --> UpdateAvailableModels[Update Available Models]
+        UpdateAvailableModels --> ModelSelection
+        
+        ModelSelection --> SaveSettings[Save Settings Button]
+        SaveSettings --> UpdateSessionSettings[Update Session Settings]
+        UpdateSessionSettings --> SettingsSaved[Show Success]
+        
+        SettingsSection --> ToggleDebug[Toggle Debug Mode]
+        ToggleDebug --> UpdateDebugState[Update Debug State]
+    end
+    
+    %% Debug section
+    subgraph DebugFlow["Debug Flow"]
+        Sidebar --> DebugSection[Debug Section]
+        DebugSection --> CheckDBStatus[Check DB Status]
+        
+        CheckDBStatus --> DBConnected{DB Connected?}
+        DBConnected -->|Yes| ShowDBSuccess[Show Success]
+        DBConnected -->|No| ShowDBError[Show Error]
+        
+        DebugSection --> CheckLangSmith[Check LangSmith]
+        CheckLangSmith --> LangSmithEnabled{Enabled?}
+        LangSmithEnabled -->|Yes| ShowLangSmithSuccess[Show Success]
+        LangSmithEnabled -->|No| ShowLangSmithWarning[Show Warning]
+    end
+    
+    %% Service layer
+    subgraph Services["Service Layer"]
+        CallExtractService --> ExtractService[Expense Service]
+        CallGeminiSTT --> GeminiService[Gemini STT Service]
+        
+        ExtractService --> MongoDB[(MongoDB)]
+        ExtractService --> AIProvider{AI Provider}
+        
+        AIProvider -->|OpenAI| OpenAILLM[OpenAI LLM]
+        AIProvider -->|Gemini| GeminiLLM[Gemini LLM]
+        
+        GeminiService --> GeminiAPI[Gemini API]
+        
+        CreateCategory --> CategoryService[Category Service]
+        CreateSubcategory --> CategoryService
+        DeleteCategoryService --> CategoryService
+        CategoryService --> MongoDB
+    end
+    
+    %% Error handling
+    TextEmptyError -.-> TextInput
+    NoAudioWarning -.-> VoiceRecord
+    TranscriptionError -.-> VoiceRecord
+    NoTranscriptWarning -.-> VoiceRecord
+    CategoryExistsError -.-> AddCategory
+    CategoryCreateError -.-> AddCategory
+    SubcategoryExistsError -.-> AddSubcategory
+    SubcategoryCreateError -.-> AddSubcategory
+    DeleteError -.-> ViewCategories
+    
+    %% Styling
+    classDef success fill:#d4edda,stroke:#c3e6cb,color:#155724
+    classDef error fill:#f8d7da,stroke:#f5c6cb,color:#721c24
+    classDef warning fill:#fff3cd,stroke:#ffeeba,color:#856404
+    classDef process fill:#e2e3e5,stroke:#d6d8db,color:#383d41
+    classDef userAction fill:#cce5ff,stroke:#b8daff,color:#004085
+    
+    class ShowSuccess,CategorySuccess,SettingsSaved,ShowDBSuccess,ShowLangSmithSuccess,ShowSuccessMsg success
+    class TextEmptyError,TranscriptionError,CategoryExistsError,CategoryCreateError,SubcategoryExistsError,SubcategoryCreateError,DeleteError,ShowDBError,DisplayError,DisplayInvalid error
+    class NoAudioWarning,NoTranscriptWarning,ShowLangSmithWarning,ShowMissingFields warning
+    class CallExtractService,CallGeminiSTT,CreateCategory,CreateSubcategory,DeleteCategoryService,UpdateSessionSettings process
+    class VoiceRecord,ExtractButton,TranscribeBtn,SubmitCategory,SubmitSubcategory,SaveSettings userAction

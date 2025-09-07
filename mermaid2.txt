@@ -1,0 +1,129 @@
+flowchart TD
+    subgraph "User Interface"
+        A[User enters expense text] -->|Manual input| B[Text in expense_text_area]
+        A1[User records audio] -->|st.audio_input| A2[Audio bytes captured]
+        A2 -->|Click Transcribe| A3["transcribe_btn clicked"]
+    end
+
+    subgraph "Voice Transcription Flow"
+        A3 -->|Check audio| B1{Audio exists?}
+        B1 -->|No| B2["Warning: Please record audio first"]
+        B1 -->|Yes| B3["Set is_transcribing=True"]
+        B3 -->|Show spinner| B4["Normalize MIME type\n(webm/ogg → codecs=opus)"]
+        B4 --> B5["Call transcribe_with_gemini()"]
+        
+        subgraph "Gemini STT"
+            B5 -->|Check dependencies| C1{genai SDK available?}
+            C1 -->|No| C2["RuntimeError: SDK not available"]
+            C1 -->|Yes| C3{GOOGLE_API_KEY configured?}
+            C3 -->|No| C4["RuntimeError: API key not configured"]
+            C3 -->|Yes| C5["Configure genai with API key"]
+            C5 --> C6["Create GenerativeModel(gemini-1.5-flash)"]
+            C6 --> C7["Build parts array with audio + prompt"]
+            C7 --> C8["Call gmodel.generate_content()"]
+            C8 --> C9{Response has text?}
+            C9 -->|Yes| C10["Return text.strip()"]
+            C9 -->|No| C11{Has candidates?}
+            C11 -->|Yes| C12["Extract text from candidates"]
+            C11 -->|No| C13["Return empty string"]
+            C12 --> C14["Return extracted text"]
+            C10 --> C15["Transcript result"]
+            C13 --> C15
+            C14 --> C15
+        end
+        
+        B5 --> C15
+        C15 -->|Back to UI| B6{Transcript exists?}
+        B6 -->|No| B7["Warning: No transcription returned"]
+        B6 -->|Yes| B8["Merge with existing text"]
+        B8 --> B9["Update session state & widget value"]
+        B9 --> B10["Success message & st.rerun()"]
+        
+        B2 --> B11["Set is_transcribing=False"]
+        B7 --> B11
+        B10 --> B11
+    end
+    
+    subgraph "Expense Extraction Flow"
+        B -->|Click Extract & Save| D{Text exists?}
+        D -->|No| D1["Error: Please enter expense"]
+        D -->|Yes| D2["Get provider & model from settings"]
+        D2 --> D3["Call extract_and_save()"]
+        
+        subgraph "extract_and_save()"
+            D3 --> E1["Get DB connection"]
+            E1 --> E2["Ensure indexes"]
+            E2 --> E3["Create ExpensesRepository"]
+            E3 --> E4["Call run_extraction()"]
+            
+            subgraph "run_extraction()"
+                E4 --> F1["Build extraction chain"]
+                F1 --> F2["Build categories block"]
+                F2 --> F3["Invoke chain with text, now_iso, categories"]
+                
+                subgraph "LangChain Execution"
+                    F3 --> G1["Format EXTRACTION_PROMPT"]
+                    G1 --> G2["Call LLM (OpenAI or Gemini)"]
+                    G2 --> G3["Parse output with StrOutputParser"]
+                    G3 --> G4["Raw text response"]
+                end
+                
+                F3 --> G4
+                G4 --> F4{Parse JSON}
+                F4 -->|Success| F5["Create ExtractionResult"]
+                F4 -->|Failure| F6["Create error ExtractionResult"]
+                F5 --> F7["Return result + debug info"]
+                F6 --> F7
+            end
+            
+            E4 --> F7
+            F7 --> E5["Create ExtractionLog"]
+            E5 --> E6["Insert log to MongoDB"]
+            E6 --> E7{Result valid & complete?}
+            E7 -->|No| E8["Return result, empty IDs"]
+            E7 -->|Yes| E9["Create ExpenseCreate"]
+            E9 --> E10["Insert expense to MongoDB"]
+            E10 --> E11["Return result, expense_id, log_id"]
+            E8 --> E12["Attach debug extras"]
+            E11 --> E12
+        end
+        
+        D3 -->|Try/catch| D4{Success?}
+        D4 -->|No| D5["Create error ExtractionResult"]
+        D4 -->|Yes| D6["Store result in session state"]
+        D5 --> D6
+        D6 --> D7{Result valid?}
+        D7 -->|Yes| D8["Reload expenses from DB"]
+        D8 --> D9["Show success message"]
+        D9 --> D10["Clear input field"]
+        D7 -->|No| D11["Keep input for correction"]
+    end
+    
+    subgraph "Result Display"
+        D6 --> H1["display_extraction_result()"]
+        H1 --> H2{Result valid?}
+        H2 -->|Yes| H3["Show success & extracted fields"]
+        H2 -->|No| H4["Show error & missing fields"]
+        H3 --> H5{Debug mode enabled?}
+        H5 -->|Yes| H6["Show debug panel with raw response"]
+    end
+    
+    subgraph "Data Processing"
+        E6 -.->|Redact secrets| I1["redact_sensitive_data()"]
+        I1 -.->|Mask API keys| I2["Return sanitized settings"]
+        I2 -.->|Store in MongoDB| I3["extraction_logs collection"]
+        
+        E10 -.->|Store expense| I4["expenses collection"]
+    end
+    
+    classDef error fill:#ffcccc,stroke:#ff0000
+    classDef success fill:#ccffcc,stroke:#00aa00
+    classDef process fill:#f9f9f9,stroke:#999999
+    classDef api fill:#ccccff,stroke:#0000ff
+    classDef ui fill:#ffffcc,stroke:#999900
+    
+    class B2,B7,C2,C4,D1,D5,H4 error
+    class B10,D9,H3 success
+    class G1,G2,G3,G4 api
+    class A,A1,A2,A3,B ui
+    class B3,B4,B5,B8,B9,D2,D3,E1,E2,E3,E4,E5,E6,E9,E10 process
