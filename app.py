@@ -7,6 +7,8 @@ import streamlit as st
 from datetime import datetime
 import sys
 import os
+import hashlib
+import hmac
 
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
@@ -23,6 +25,80 @@ from src.ai.providers import get_available_providers
 # Available providers
 AVAILABLE_PROVIDERS = get_available_providers()
 from ui.components import color_picker
+
+# -------- Authentication Helpers --------
+def _get_admin_iterations() -> int:
+    """Read PBKDF2 iterations from secrets/env with a safe default."""
+    default_iterations = 200_000
+    try:
+        # Prefer Streamlit secrets if available
+        if 'secrets' in dir(st):
+            if 'admin_password_iterations' in st.secrets:
+                return int(str(st.secrets['admin_password_iterations']).strip())
+            if 'ADMIN_PASSWORD_ITERATIONS' in st.secrets:
+                return int(str(st.secrets['ADMIN_PASSWORD_ITERATIONS']).strip())
+    except Exception:
+        pass
+    try:
+        from os import getenv
+        env_val = getenv('ADMIN_PASSWORD_ITERATIONS')
+        if env_val and env_val.strip():
+            return int(env_val.strip())
+    except Exception:
+        pass
+    return default_iterations
+
+
+def verify_admin_password(plain_password: str) -> bool:
+    """Verify the provided password.
+
+    Prefers PBKDF2-SHA256 hash+salt if configured; otherwise falls back to
+    comparing against an optional plaintext admin password from secrets.
+    """
+    try:
+        stored_hash_hex = settings.admin_password_hash
+        salt_hex = settings.admin_password_salt
+        if stored_hash_hex and salt_hex:
+            iterations = _get_admin_iterations()
+            derived = hashlib.pbkdf2_hmac(
+                'sha256',
+                plain_password.encode('utf-8'),
+                bytes.fromhex(salt_hex),
+                iterations,
+            )
+            return hmac.compare_digest(derived.hex(), stored_hash_hex)
+
+        # Fallback: plaintext secret
+        if getattr(settings, 'admin_password_plain', None):
+            return hmac.compare_digest(plain_password or "", settings.admin_password_plain)
+        return False
+    except Exception:
+        return False
+
+
+def render_auth_gate() -> None:
+    """Render an access gate to choose Admin (with password) or Guest (read-only)."""
+    st.title(f"{settings.app_icon} {settings.app_title}")
+    st.markdown("Access required: sign in as Admin or continue as Guest (read-only)")
+    with st.container(border=True):
+        pwd = st.text_input("Admin Password", type="password", key="auth_password")
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            login = st.button("🔐 Login as Admin", type="primary")
+        with c2:
+            guest = st.button("👀 Continue as Guest")
+
+        if login:
+            if verify_admin_password(pwd or ""):
+                st.session_state['role'] = 'admin'
+                st.session_state.pop('auth_password', None)
+                st.success("Authenticated as Admin")
+                st.rerun()
+            else:
+                st.error("Invalid password")
+        if guest:
+            st.session_state['role'] = 'guest'
+            st.rerun()
 
 # Page configuration
 st.set_page_config(
@@ -78,10 +154,17 @@ if 'confirm_delete_expense' not in st.session_state:
 
 def main():
     """Main application entry point"""
+    # Access gate (first visit)
+    if 'role' not in st.session_state:
+        render_auth_gate()
+        st.stop()
+
+    is_admin = st.session_state.get('role') == 'admin'
 
     # Title
     st.title(f"{settings.app_icon} {settings.app_title}")
-    st.markdown("Track your expenses with natural language input and AI-powered extraction")
+    mode_label = "Admin" if is_admin else "Guest (read-only)"
+    st.markdown(f"Track your expenses with natural language input and AI-powered extraction — **{mode_label}**")
 
     # Create two columns - main content and sidebar
     col1, col2 = st.columns([2, 1])
@@ -97,56 +180,68 @@ def main_page():
 
     st.header("Add New Expense")
 
-    # Expense input form
-    with st.form("expense_form"):
-        # Voice input row: audio input + inline controls + text area
-        st.markdown("### Input")
-        vcol1, vcol2 = st.columns([1, 3])
+    is_admin = st.session_state.get('role') == 'admin'
 
-        with vcol1:
-            audio = st.audio_input("🎙️ Record", key="voice_input")
-            st.caption("Tip: Chrome/Edge often record WebM/Opus. WAV or Opus usually gives better results.")
+    # Expense input form (admin only)
+    if is_admin:
+        with st.form("expense_form"):
+            # Voice input row: audio input + inline controls + text area
+            st.markdown("### Input")
+            vcol1, vcol2 = st.columns([1, 3])
 
-        with vcol2:
-            expense_text = st.text_area(
-                "Describe your expense:",
-                value=st.session_state.expense_input,
-                height=100,
-                placeholder="e.g., Paid 250 for lunch at SpiceHub yesterday, or Bus fare 45 to office",
-                help="Enter your expense or use voice above; we'll transcribe and fill this for confirmation."
-            )
+            with vcol1:
+                audio = st.audio_input("🎙️ Record", key="voice_input")
+                st.caption("Tip: Chrome/Edge often record WebM/Opus. WAV or Opus usually gives better results.")
 
-        # Inline controls under input
-        c1, c2, c3 = st.columns([1, 1, 2])
-        with c1:
-            transcribe_btn = st.form_submit_button("📝 Transcribe", use_container_width=True)
-        with c2:
-            clear_voice_btn = st.form_submit_button("❌ Clear Voice", use_container_width=True)
+            with vcol2:
+                expense_text = st.text_area(
+                    "Describe your expense:",
+                    value=st.session_state.expense_input,
+                    height=100,
+                    placeholder="e.g., Paid 250 for lunch at SpiceHub yesterday, or Bus fare 45 to office",
+                    help="Enter your expense or use voice above; we'll transcribe and fill this for confirmation."
+                )
 
-        col_extract, col_clear = st.columns(2)
+            # Inline controls under input
+            c1, c2, c3 = st.columns([1, 1, 2])
+            with c1:
+                transcribe_btn = st.form_submit_button("📝 Transcribe", use_container_width=True)
+            with c2:
+                clear_voice_btn = st.form_submit_button("❌ Clear Voice", use_container_width=True)
 
-        with col_extract:
-            extract_button = st.form_submit_button(
-                "🔍 Extract & Save",
-                type="primary",
-                use_container_width=True
-            )
+            col_extract, col_clear = st.columns(2)
 
-        with col_clear:
-            clear_button = st.form_submit_button(
-                "🗑️ Clear",
-                use_container_width=True
-            )
+            with col_extract:
+                extract_button = st.form_submit_button(
+                    "🔍 Extract & Save",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            with col_clear:
+                clear_button = st.form_submit_button(
+                    "🗑️ Clear",
+                    use_container_width=True
+                )
+    else:
+        st.info("Guest mode: Sign in as Admin to add new expenses.")
+        # Initialize placeholders to avoid reference issues
+        audio = None
+        expense_text = st.session_state.get('expense_input', '')
+        transcribe_btn = False
+        clear_voice_btn = False
+        extract_button = False
+        clear_button = False
 
     # Voice UI actions inside the same form submit cycle
     if 'is_transcribing' not in st.session_state:
         st.session_state.is_transcribing = False
 
-    if clear_voice_btn:
+    if is_admin and clear_voice_btn:
         st.session_state.pop('voice_input', None)
         st.toast("Voice input cleared", icon="✅")
 
-    if transcribe_btn:
+    if is_admin and transcribe_btn:
         if audio and audio.type:
             try:
                 from src.ai.providers import transcribe_with_gemini
@@ -186,7 +281,7 @@ def main_page():
             st.warning("Please record audio first.")
 
     # Handle extract submission
-    if extract_button:
+    if is_admin and extract_button:
         if expense_text.strip():
             provider = st.session_state.settings['provider']
             model = st.session_state.settings['model']
@@ -226,7 +321,7 @@ def main_page():
         else:
             st.error("Please enter an expense description.")
 
-    if clear_button:
+    if is_admin and clear_button:
         st.session_state.expense_input = ""
         st.session_state.extraction_result = None
         st.session_state.show_success = False
@@ -251,11 +346,11 @@ def main_page():
                 with col1:
                     st.empty()  # Spacer
                 with col2:
-                    if st.button("✏️ Edit", key=f"edit_expense_{i}"):
+                    if st.button("✏️ Edit", key=f"edit_expense_{i}", disabled=st.session_state.get('role') != 'admin'):
                         st.session_state.editing_expense = expense
                         st.rerun()
                 with col3:
-                    if st.button("🗑️ Delete", key=f"delete_expense_{i}"):
+                    if st.button("🗑️ Delete", key=f"delete_expense_{i}", disabled=st.session_state.get('role') != 'admin'):
                         st.session_state.confirm_delete_expense = expense
                         st.rerun()
 
@@ -277,11 +372,11 @@ def main_page():
         st.info("No expenses yet. Add your first expense above!")
 
     # Handle edit expense dialog
-    if st.session_state.editing_expense:
+    if st.session_state.get('role') == 'admin' and st.session_state.editing_expense:
         show_edit_expense_dialog()
 
     # Handle delete confirmation dialog
-    if st.session_state.confirm_delete_expense:
+    if st.session_state.get('role') == 'admin' and st.session_state.confirm_delete_expense:
         show_delete_confirmation_dialog()
 
 def show_edit_expense_dialog():
@@ -472,51 +567,66 @@ def display_extraction_result():
 def sidebar():
     """Sidebar with categories management and settings"""
 
+    # User role & logout
+    with st.container(border=True):
+        role = st.session_state.get('role', 'guest')
+        st.markdown(f"**User:** {'Admin' if role == 'admin' else 'Guest (read-only)'}")
+        if st.button("🚪 Logout"):
+            for k in [
+                'role', 'auth_password', 'expense_input', 'extraction_result',
+                'editing_expense', 'confirm_delete_expense'
+            ]:
+                st.session_state.pop(k, None)
+            st.rerun()
+
     # Categories Management
     st.header("📂 Categories")
 
     with st.expander("Manage Categories", expanded=False):
-        # Add new category
-        with st.form("add_category"):
-            new_category = st.text_input("New Category Name")
-            # Use Streamlit's native color picker inside forms (form-safe)
-            color = st.color_picker(
-                "Choose Category Color",
-                value="#F8BBD9",
-                key="category_color_picker_native",
-                help="Pick a beautiful pastel color for your category"
-            )
-            # Ensure color is properly formatted
-            color = color.strip() if color else "#F8BBD9"
-            icon = st.text_input("Icon (emoji or short text)", placeholder="🍽️")
-            add_cat_btn = st.form_submit_button("Add Category")
+        if st.session_state.get('role') == 'admin':
+            # Add new category
+            with st.form("add_category"):
+                new_category = st.text_input("New Category Name")
+                # Use Streamlit's native color picker inside forms (form-safe)
+                color = st.color_picker(
+                    "Choose Category Color",
+                    value="#F8BBD9",
+                    key="category_color_picker_native",
+                    help="Pick a beautiful pastel color for your category"
+                )
+                # Ensure color is properly formatted
+                color = color.strip() if color else "#F8BBD9"
+                icon = st.text_input("Icon (emoji or short text)", placeholder="🍽️")
+                add_cat_btn = st.form_submit_button("Add Category")
 
-            if add_cat_btn and new_category.strip():
-                # Check if category already exists
-                if any((cat['name'] if isinstance(cat, dict) else getattr(cat, 'name', '')).lower() == new_category.lower() for cat in st.session_state.categories):
-                    st.error("Category already exists!")
-                else:
-                    try:
-                        # Try service-based create if available
-                        from src.services.category_service import CategoryService
-                        from src.models.category import CategoryCreate
-                        svc = CategoryService()
-                        created = svc.create_category(CategoryCreate(name=new_category.strip(), description=None, color=color, icon=icon.strip() if icon else None))
-                        st.session_state.categories = svc.get_all_categories()
-                        st.success(f"Category '{created.name}' added!")
-                        st.rerun()
-                    except Exception:
-                        # Fallback to session dict for legacy demo
-                        st.session_state.categories.append({
-                            'name': new_category.strip(),
-                            'subcategories': [],
-                            'color': color,
-                            'icon': icon.strip() if icon else None,
-                            'created_at': datetime.now(),
-                            'updated_at': datetime.now()
-                        })
-                        st.success(f"Category '{new_category}' added!")
-                        st.rerun()
+                if add_cat_btn and new_category.strip():
+                    # Check if category already exists
+                    if any((cat['name'] if isinstance(cat, dict) else getattr(cat, 'name', '')).lower() == new_category.lower() for cat in st.session_state.categories):
+                        st.error("Category already exists!")
+                    else:
+                        try:
+                            # Try service-based create if available
+                            from src.services.category_service import CategoryService
+                            from src.models.category import CategoryCreate
+                            svc = CategoryService()
+                            created = svc.create_category(CategoryCreate(name=new_category.strip(), description=None, color=color, icon=icon.strip() if icon else None))
+                            st.session_state.categories = svc.get_all_categories()
+                            st.success(f"Category '{created.name}' added!")
+                            st.rerun()
+                        except Exception:
+                            # Fallback to session dict for legacy demo
+                            st.session_state.categories.append({
+                                'name': new_category.strip(),
+                                'subcategories': [],
+                                'color': color,
+                                'icon': icon.strip() if icon else None,
+                                'created_at': datetime.now(),
+                                'updated_at': datetime.now()
+                            })
+                            st.success(f"Category '{new_category}' added!")
+                            st.rerun()
+        else:
+            st.info("Guest mode: Category management is disabled.")
 
     # Display existing categories
     for i, category in enumerate(st.session_state.categories):
@@ -527,32 +637,35 @@ def sidebar():
 
         with st.expander(f"{cat_name} ({len(cat_subs)} subcategories)"):
             # Add subcategory
-            with st.form(f"add_sub_{i}"):
-                new_sub = st.text_input(f"Add subcategory to {cat_name}")
-                add_sub_btn = st.form_submit_button("Add Subcategory")
+            if st.session_state.get('role') == 'admin':
+                with st.form(f"add_sub_{i}"):
+                    new_sub = st.text_input(f"Add subcategory to {cat_name}")
+                    add_sub_btn = st.form_submit_button("Add Subcategory")
 
-                if add_sub_btn and new_sub.strip():
-                    try:
-                        # For dict legacy data
-                        if isinstance(category, dict):
-                            if new_sub.lower() in [s.lower() for s in cat_subs]:
-                                st.error("Subcategory already exists!")
+                    if add_sub_btn and new_sub.strip():
+                        try:
+                            # For dict legacy data
+                            if isinstance(category, dict):
+                                if new_sub.lower() in [s.lower() for s in cat_subs]:
+                                    st.error("Subcategory already exists!")
+                                else:
+                                    st.session_state.categories[i]['subcategories'].append(new_sub.strip())
+                                    st.session_state.categories[i]['updated_at'] = datetime.now()
+                                    st.success(f"Subcategory '{new_sub}' added!")
+                                    st.rerun()
                             else:
-                                st.session_state.categories[i]['subcategories'].append(new_sub.strip())
-                                st.session_state.categories[i]['updated_at'] = datetime.now()
+                                # CategoryModel via service
+                                from src.services.category_service import CategoryService
+                                from src.models.category import SubcategoryCreate
+                                svc = CategoryService()
+                                svc.add_subcategory(str(cat_id), SubcategoryCreate(name=new_sub.strip()))
+                                st.session_state.categories = svc.get_all_categories()
                                 st.success(f"Subcategory '{new_sub}' added!")
                                 st.rerun()
-                        else:
-                            # CategoryModel via service
-                            from src.services.category_service import CategoryService
-                            from src.models.category import SubcategoryCreate
-                            svc = CategoryService()
-                            svc.add_subcategory(str(cat_id), SubcategoryCreate(name=new_sub.strip()))
-                            st.session_state.categories = svc.get_all_categories()
-                            st.success(f"Subcategory '{new_sub}' added!")
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Failed to add subcategory: {e}")
+                        except Exception as e:
+                            st.error(f"Failed to add subcategory: {e}")
+            else:
+                st.caption("Guest mode: Adding subcategories is disabled.")
 
             # List subcategories
             if cat_subs:
@@ -564,7 +677,7 @@ def sidebar():
                         sub_name = subcat if isinstance(subcat, str) else getattr(subcat, 'name', str(subcat))
                         st.write(f"• {sub_name}")
                     with col2:
-                        if st.button("🗑️", key=f"del_sub_{i}_{j}"):
+                        if st.button("🗑️", key=f"del_sub_{i}_{j}", disabled=st.session_state.get('role') != 'admin'):
                             try:
                                 if isinstance(category, dict):
                                     st.session_state.categories[i]['subcategories'].pop(j)
@@ -583,7 +696,7 @@ def sidebar():
                 st.info("No subcategories yet.")
 
             # Delete category
-            if st.button(f"Delete {cat_name}", key=f"del_cat_{i}"):
+            if st.button(f"Delete {cat_name}", key=f"del_cat_{i}", disabled=st.session_state.get('role') != 'admin'):
                 try:
                     if isinstance(category, dict):
                         st.session_state.categories.pop(i)
@@ -609,7 +722,8 @@ def sidebar():
         new_provider = st.selectbox(
             "AI Provider",
             options=list(st.session_state.available_providers.keys()),
-            index=list(st.session_state.available_providers.keys()).index(current_provider)
+            index=list(st.session_state.available_providers.keys()).index(current_provider),
+            disabled=st.session_state.get('role') != 'admin'
         )
 
         # Model selection based on provider
@@ -618,10 +732,11 @@ def sidebar():
         new_model = st.selectbox(
             "Model",
             options=available_models,
-            index=available_models.index(current_model)
+            index=available_models.index(current_model),
+            disabled=st.session_state.get('role') != 'admin'
         )
 
-        if st.button("Save Settings"):
+        if st.button("Save Settings", disabled=st.session_state.get('role') != 'admin'):
             st.session_state.settings['provider'] = new_provider
             st.session_state.settings['model'] = new_model
             st.session_state.settings['updated_at'] = datetime.now()
@@ -631,7 +746,7 @@ def sidebar():
 
     # Debug
     st.header("🐞 Debug")
-    debug_mode = st.toggle("Enable Debug Mode", value=st.session_state.get('debug_mode', False))
+    debug_mode = st.toggle("Enable Debug Mode", value=st.session_state.get('debug_mode', False), disabled=st.session_state.get('role') != 'admin')
     st.session_state['debug_mode'] = debug_mode
     if debug_mode:
         st.caption("Debug mode will show detailed logs, raw model output, and errors.")

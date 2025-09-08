@@ -37,6 +37,12 @@ class AppSettings(BaseModel):
     log_level: str = Field(default="INFO")
     debug_mode: bool = Field(default=False)
 
+    # Admin auth (PBKDF2-SHA256 hex-encoded values)
+    admin_password_hash: Optional[str] = Field(default=None)
+    admin_password_salt: Optional[str] = Field(default=None)
+    # Optional plaintext fallback (only used if hash+salt are absent)
+    admin_password_plain: Optional[str] = Field(default=None)
+
     @staticmethod
     def _read_secret(name: str) -> Optional[str]:
         # Prefer Streamlit secrets if available
@@ -96,6 +102,9 @@ class AppSettings(BaseModel):
             app_icon=cls._read_secret("APP_ICON") or "💰",
             log_level=cls._read_secret("LOG_LEVEL") or "INFO",
             debug_mode=cls._read_secret("DEBUG_MODE") == "true",
+            admin_password_hash=cls._read_secret("ADMIN_PASSWORD_HASH"),
+            admin_password_salt=cls._read_secret("ADMIN_PASSWORD_SALT"),
+            admin_password_plain=cls._read_secret("ADMIN_PASSWORD"),
         )
 
 

@@ -27,11 +27,12 @@ wheels/
 
 # Streamlit
 .streamlit/secrets.toml
-# Keep the sample file: .streamlit/secrets.toml.sample# IDE
+# Keep the sample file: .streamlit/secrets.toml.sample
+
+# IDE
 .vscode/
 .idea/
-*.swp
-*.swo
+*.swp*.swo
 *~
 
 # OS
