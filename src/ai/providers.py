@@ -20,13 +20,19 @@ from src.config.settings import settings
 
 
 def _setup_langsmith():
-    """Configure LangSmith tracing environment variables."""
+    """Configure LangSmith/LangChain tracing env vars from settings if available."""
+    enabled = False
     if settings.langsmith_api_key:
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
-        os.environ["LANGCHAIN_PROJECT"] = "expense_tracker"
-        return True
-    return False
+        enabled = True
+    if settings.langsmith_project:
+        os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+    if settings.langsmith_endpoint:
+        os.environ["LANGCHAIN_ENDPOINT"] = settings.langsmith_endpoint
+    if settings.langsmith_tracing or enabled:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        enabled = True
+    return enabled
 
 
 ProviderName = Literal["openai", "gemini"]
@@ -39,7 +45,9 @@ def get_llm(provider: ProviderName, model: str):
     if provider == "openai":
         if not settings.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY not configured.")
-        llm = ChatOpenAI(api_key=settings.openai_api_key, model=model, temperature=0)
+        # Fallback to first supported model if provided model is not in allowed list
+        chosen_model = model if model in settings.openai_models else (settings.openai_models[0] if settings.openai_models else model)
+        llm = ChatOpenAI(api_key=settings.openai_api_key, model=chosen_model, temperature=0)
         if langsmith_enabled:
             # Enable tracing for this specific instance
             llm.callbacks = []  # LangSmith will automatically attach callbacks
@@ -48,7 +56,8 @@ def get_llm(provider: ProviderName, model: str):
     if provider == "gemini":
         if not settings.google_api_key:
             raise RuntimeError("GOOGLE_API_KEY not configured.")
-        llm = ChatGoogleGenerativeAI(google_api_key=settings.google_api_key, model=model, temperature=0)
+        chosen_model = model if model in settings.gemini_models else (settings.gemini_models[0] if settings.gemini_models else model)
+        llm = ChatGoogleGenerativeAI(google_api_key=settings.google_api_key, model=chosen_model, temperature=0)
         if langsmith_enabled:
             # Enable tracing for this specific instance
             llm.callbacks = []  # LangSmith will automatically attach callbacks
