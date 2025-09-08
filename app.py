@@ -108,6 +108,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# PWA: link manifest and register service worker (limited to /static scope)
+st.markdown(
+    """
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0c6cf2">
+    """,
+    unsafe_allow_html=True,
+)
+st.components.v1.html(
+    """
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js').catch(err => console.warn('SW registration failed:', err));
+      }
+    </script>
+    """,
+    height=0,
+)
+
 # Initialize services and session state
 if 'categories' not in st.session_state:
     try:
