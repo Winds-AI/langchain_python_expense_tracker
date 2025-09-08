@@ -79,7 +79,10 @@
   - Support for OpenAI and Google Gemini
   - Dynamic model selection with validation
   - Configurable temperature and max tokens
+  - **Voice Transcription**: Gemini integration for audio-to-text conversion
+  - **Audio Processing**: MIME type handling (WebM, Opus, WAV) for transcription
   - Fallback handling for unavailable providers
+  - **LangSmith Tracing**: Optional AI call monitoring and debugging
 
 - ✅ `src/ai/prompts.py`: Comprehensive prompt engineering
 
@@ -130,11 +133,17 @@
 
 - ✅ `src/ui/main_page.py`: Expense input and management interface
 
-  - Natural language text input with helpful placeholders
+  - Natural language text input with helpful Gujlish placeholders
+  - **Voice Input Integration**: Audio recording with Gemini transcription
+  - **Audio Processing**: MIME type handling for WebM/Opus/WAV formats
+  - **Transcription UI**: Loading states and transcription feedback
   - Form-based submission with validation
   - Real-time extraction results display
-  - Recent expenses list with expandable details
+  - **Expense Management**: Edit and delete functionality with confirmation dialogs
+  - **CRUD Operations**: Full create, read, update, delete for expenses
+  - Recent expenses list with expandable details and action buttons
   - Success/error feedback with preserved input on errors
+  - **Session State Management**: Comprehensive state handling for all interactions
 
 - ✅ `src/ui/sidebar.py`: Comprehensive management interface
 
@@ -214,31 +223,60 @@
 
 ### 10. Current Features (Beyond Original Scope) ✅
 
-- ✅ Advanced AI Configuration:
+- ✅ **Voice Input & Transcription**:
+
+  - Audio recording with Streamlit's audio_input component
+  - Gemini AI integration for speech-to-text conversion
+  - MIME type handling for WebM/Opus/WAV audio formats
+  - Transcription feedback and error handling
+  - Gujlish and Hindi-English speech recognition
+
+- ✅ **Expense Management (CRUD)**:
+
+  - Edit existing expenses with modal dialogs
+  - Delete expenses with confirmation dialogs
+  - Full update operations with validation
+  - Session state management for edit/delete flows
+  - Database persistence with audit trails
+
+- ✅ **Advanced AI Configuration**:
 
   - Temperature and max tokens control
-  - Multiple model support per provider
-  - LangSmith integration for AI tracing
+  - Multiple model support per provider (GPT-4, Gemini Pro, etc.)
+  - LangSmith integration for AI tracing and monitoring
+  - Provider-specific model validation
 
-- ✅ Rich UI/UX Features:
+- ✅ **Rich UI/UX Features**:
 
-  - Color picker with curated pastel palette
-  - Icon support for categories
-  - Comprehensive settings management
-  - Debug mode with detailed logging
-  - Mobile-responsive design
+  - Color picker with curated pastel palette (15 trendy colors)
+  - Icon support for categories with emoji/text options
+  - Comprehensive multi-section settings management
+  - Debug mode with detailed logging and raw responses
+  - Mobile-responsive design with touch-friendly controls
+  - PWA support with service worker and manifest
 
-- ✅ Enhanced Data Models:
+- ✅ **Enhanced Data Models**:
 
-  - Detailed category metadata (colors, icons, descriptions)
-  - Comprehensive application settings
-  - Audit logging for all AI extractions
-  - Version tracking and user association
+  - Detailed category metadata (colors, icons, descriptions, sort order)
+  - Comprehensive application settings with versioning
+  - Audit logging for all AI extractions with full traceability
+  - Version tracking and user association for future multi-user support
+  - Extraction logs with provider, model, and settings snapshots
 
-- ✅ Robust Error Handling:
+- ✅ **Authentication & Security**:
+
+  - PBKDF2-SHA256 password hashing with configurable iterations
+  - Admin/Guest role-based access control
+  - Session state management with secure logout
+  - API key management via Streamlit secrets
+  - Input sanitization and validation
+
+- ✅ **Robust Error Handling**:
   - Multi-layer validation and error recovery
-  - Session state preservation
-  - Fallback mechanisms for service failures
+  - Session state preservation during errors
+  - Fallback mechanisms for AI provider failures
+  - Database connection resilience with reconnection
+  - User-friendly error messages with recovery guidance
 
 ### 11. Future Enhancements (Still Out of Scope)
 

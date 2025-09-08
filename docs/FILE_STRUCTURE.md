@@ -52,7 +52,11 @@ py_expense_tracker/
 
 ### Notes
 
-- Keep Streamlit UI thin; route business logic through `services`.
-- Repositories encapsulate DB access; avoid direct DB calls from UI.
-- Centralize provider selection in `ai/providers.py`.
-- Use Pydantic models across boundaries for clarity.
+- **Architecture**: Keep Streamlit UI thin; route business logic through `services` layer.
+- **Data Access**: Repositories encapsulate DB access; avoid direct DB calls from UI.
+- **AI Integration**: Centralize provider selection in `ai/providers.py` with support for both text extraction and voice transcription.
+- **Type Safety**: Use Pydantic models across boundaries for clarity and validation.
+- **Voice Processing**: Voice transcription integrated into `ai/providers.py` with Gemini STT support.
+- **Session Management**: Comprehensive state management across all UI components.
+- **Error Handling**: Multi-layer validation and error recovery throughout the stack.
+- **Security**: PBKDF2-SHA256 authentication with configurable iterations and secure API key management.

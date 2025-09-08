@@ -5,12 +5,17 @@ A minimal Streamlit application for tracking expenses with natural language inpu
 ## Features
 
 - **Natural Language Input**: Describe your expenses in plain English
-- **AI-Powered Extraction**: Automatically extracts amount, category, and subcategory
-- **Category Management**: Add and manage custom categories and subcategories
-- **Provider Settings**: Choose between OpenAI and Gemini AI providers
-- **Secure Access Gate**: Admin login with password; Guest read-only mode
-- **Responsive UI**: Works well on both desktop and mobile devices
-- **Mock Data**: Includes sample data for demonstration
+- **Voice Input & Transcription**: Record audio and automatically transcribe to text using Gemini
+- **AI-Powered Extraction**: Automatically extracts amount, category, and subcategory using OpenAI or Gemini
+- **Category Management**: Add and manage custom categories and subcategories with colors and icons
+- **Expense Management**: Edit and delete existing expenses with full CRUD operations
+- **Provider Settings**: Choose between OpenAI and Gemini AI providers with model selection
+- **Secure Access Gate**: Admin login with PBKDF2-SHA256 password hashing; Guest read-only mode
+- **Debug Mode**: Advanced debugging with raw AI responses, system status, and detailed logging
+- **Responsive UI**: Works well on both desktop and mobile devices with touch-friendly controls
+- **Audit Trail**: Complete logging of all AI extraction attempts with full traceability
+- **Color Picker**: Curated pastel color palette for visual category organization
+- **PWA Support**: Progressive Web App features with service worker and manifest
 
 ## Quick Start
 
@@ -136,8 +141,28 @@ ls -la venv*
 
 Try these examples:
 
+### Text Input Examples
+
 - "Lunch 250 at SpiceHub yesterday"
 - "Bus fare 45 to office this morning"
 - "Movie tickets 120 for Avengers"
 - "Electricity bill 90 for this month"
 - "Coffee and pastry 15.50"
+
+### Voice Input Examples
+
+You can also record audio and the app will transcribe it automatically:
+
+- "Spent 250 rupees on lunch at SpiceHub yesterday afternoon"
+- "Paid 45 rupees for bus fare to office this morning"
+- "Bought movie tickets worth 120 rupees for Avengers"
+- "Electricity bill came for 90 rupees this month"
+- "Had coffee and pastry for 15 rupees 50 paise"
+
+### Gujlish Examples
+
+The app supports Gujarati-English mixing:
+
+- "20rs na padika" (20 rupees worth of snacks)
+- "kaale bus ma 15 rupiya" (15 rupees for bus yesterday)
+- "lunch 250 SpiceHub ma" (250 rupees lunch at SpiceHub)

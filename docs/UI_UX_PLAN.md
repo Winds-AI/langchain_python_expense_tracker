@@ -30,14 +30,24 @@
 
   - App title with emoji icon: "💰 Expense Tracker"
   - Subtitle: Natural language expense tracking with AI extraction
+  - User role indicator: "Admin" or "Guest (read-only)"
 
-- **Expense Input Form**:
+- **Expense Input Form** (Admin Only):
 
-  - Large multi-line text area (height: 100px) with helpful Gujlish placeholder
-  - Example: "e.g., 20rs na padika, or Bus fare 45 to office yesterday"
-  - Form-based submission with validation
-  - Primary button: "🔍 Extract & Save" (full-width, primary style)
-  - Secondary button: "🗑️ Clear" (outlined style)
+  - **Voice Input Row**: Two-column layout for audio recording and text area
+
+    - Left column: Audio input button with recording status and transcribe button
+    - Right column: Large multi-line text area (height: 100px) with helpful Gujlish placeholder
+    - Example: "e.g., 20rs na padika, or Bus fare 45 to office yesterday"
+    - Voice transcription with Gemini AI integration
+    - Inline controls: "📝 Transcribe" and "❌ Clear Voice" buttons
+
+  - **Action Row**: Two-column layout for main actions
+
+    - Primary button: "🔍 Extract & Save" (full-width, primary style)
+    - Secondary button: "🗑️ Clear" (outlined style)
+
+  - **Guest Mode**: Read-only message when not logged in as admin
 
 - **Extraction Results Display**:
 
@@ -48,8 +58,13 @@
 
 - **Recent Expenses Section**:
   - Header: "Recent Expenses"
-  - Last 5 expenses as expandable cards
+  - Last 5 expenses as expandable cards with action buttons
   - Each card shows: amount, description, category, datetime, provider
+  - **Action Buttons** (Admin only):
+    - "✏️ Edit" button to modify expense details
+    - "🗑️ Delete" button with confirmation dialog
+  - **Edit Dialog**: Modal form for updating expense fields (amount, description, category, subcategory, date/time)
+  - **Delete Confirmation**: Warning dialog with expense details and confirmation buttons
   - Empty state: Encouraging message when no expenses exist
 
 ### Sidebar: Categories Manager ✅
@@ -100,16 +115,40 @@
 
 - **System Settings**:
   - Debug mode toggle with detailed logging
-  - Log level configuration
+  - Log level configuration (DEBUG, INFO, WARNING, ERROR)
   - System status indicators
+  - **Debug Panel**: Expandable section with:
+    - Database connection status and health monitoring
+    - MongoDB index creation status
+    - LangSmith tracing status (enabled/disabled)
+    - Raw AI response preservation for troubleshooting
+    - Expense and log IDs for traceability
+    - System performance metrics
+
+### Authentication & Security ✅
+
+- **Access Gate**: Initial authentication screen with Admin/Guest options
+- **Admin Authentication**: PBKDF2-SHA256 password hashing with salt and iterations
+- **Guest Mode**: Read-only access for demonstration and viewing
+- **Session Management**: Secure session state with logout functionality
+- **Role-Based UI**: Dynamic interface changes based on admin/guest permissions
+
+### Progressive Web App Features ✅
+
+- **Service Worker**: Background processing for offline capabilities
+- **Web App Manifest**: Installation support with app icons and metadata
+- **Theme Color**: Dynamic theming support with meta theme-color
+- **Responsive Design**: Mobile-first approach with touch-friendly controls
+- **PWA Registration**: Automatic service worker registration and updates
 
 ### Feedback & States ✅
 
-- **Loading States**: Spinner animations during AI extraction and database operations
+- **Loading States**: Spinner animations during AI extraction, transcription, and database operations
 - **Success Feedback**: Green success toasts with confirmation messages and automatic clearing
 - **Error Handling**: Red error displays with specific field-level feedback and input preservation
 - **Validation Messages**: Real-time validation with helpful error messages and recovery suggestions
 - **Debug Information**: Expandable debug panels with raw responses and system details
+- **Voice Processing**: Loading indicators during audio transcription with Gemini
 
 ### Responsiveness & Mobile Experience ✅
 

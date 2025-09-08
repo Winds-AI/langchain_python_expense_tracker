@@ -2,14 +2,18 @@
 
 ### Objectives
 
-- Extract structured fields from a single natural language input:
-  - amount (required, number)
-  - category (required; must be in categories list)
-  - subcategory (required; must be in selected category's subcategories)
-  - description (required, text)
-  - datetime (optional; default to now if absent)
+- Extract structured fields from multiple input types:
+  - **Text Input**: Extract from natural language text entries
+  - **Voice Input**: Convert speech to text using Gemini STT, then extract structured fields
+  - Structured fields to extract:
+    - amount (required, number)
+    - category (required; must be in categories list)
+    - subcategory (required; must be in selected category's subcategories)
+    - description (required, text)
+    - datetime (optional; default to now if absent)
 - Enforce taxonomy (no hallucinated categories/subcategories).
 - Return `valid=false` with `missing_fields` and `reason` when extraction incomplete.
+- Support Gujlish and Hindi-English code-switching for Indian users.
 
 ### Provider Abstraction ✅
 
@@ -22,6 +26,31 @@
 - **Available Models**:
   - OpenAI: gpt-3.5-turbo, gpt-4, gpt-4-turbo, gpt-4o, gpt-4o-mini, gpt-5-mini
   - Gemini: gemini-pro, gemini-pro-vision, gemini-1.5-flash, gemini-1.5-pro
+
+### Voice Transcription Integration ✅
+
+- **Speech-to-Text Provider**: Google Gemini (via `transcribe_with_gemini` function)
+- **Audio Format Support**:
+  - WebM with Opus codec (Chrome default)
+  - OGG with Opus codec (Firefox default)
+  - WAV format (fallback)
+  - Automatic MIME type normalization
+- **Transcription Features**:
+  - Gujlish and Hindi-English speech recognition
+  - Cultural context awareness for Indian expense terminology
+  - Automatic punctuation and formatting
+  - Error handling for unclear audio
+- **Integration Flow**:
+  1. User records audio via Streamlit `audio_input`
+  2. Audio bytes sent to Gemini STT API
+  3. Transcribed text populated in expense input field
+  4. User can review/edit transcription before extraction
+  5. Standard text extraction pipeline processes transcribed text
+- **Quality Optimization**:
+  - Prefer Opus codec for better STT accuracy
+  - Fallback to cheaper Gemini models for cost efficiency
+  - Loading states and progress indicators
+  - Transcription error recovery and retry mechanisms
 
 ### Structured Output Strategy
 

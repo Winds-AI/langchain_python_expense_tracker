@@ -8,13 +8,17 @@
 ### 2. Goals and Non-Goals
 
 - **Goals**:
-  - **Natural language input** to capture expenses.
+  - **Natural language input** to capture expenses with text and voice support.
+  - **Voice transcription** using Gemini AI for audio-to-text conversion.
   - **Deterministic classification** into user-defined categories/subcategories only.
+  - **Expense management** with full CRUD operations (create, read, update, delete).
   - **Validation**: If required details are missing, show errors and persist the input for quick edits.
-  - **Persistence**: Store extracted expense data in MongoDB.
-  - **Management**: Add/update categories and subcategories via sidebar UI.
-  - **Provider settings**: Choose provider (OpenAI/Gemini) and model.
-  - **Responsive UI** suitable for mobile.
+  - **Persistence**: Store extracted expense data in MongoDB with audit trails.
+  - **Management**: Add/update categories and subcategories via sidebar UI with visual enhancements.
+  - **Provider settings**: Choose provider (OpenAI/Gemini) and model with advanced configuration.
+  - **Authentication**: Secure admin access with PBKDF2-SHA256 hashing and guest read-only mode.
+  - **Debug capabilities**: Advanced debugging with raw AI responses and system monitoring.
+  - **Responsive UI** suitable for mobile with PWA support.
 - **Non-Goals (Initial)**:
   - Budgeting/analytics/dashboards.
   - Multi-user auth/roles.
@@ -25,15 +29,26 @@
 
 - **3.1 Expense Input and Extraction**
 
-  - The main page provides a single text field for natural language expense entry and a submit action.
+  - The main page provides dual input methods: text field for natural language expense entry and voice recording with automatic transcription.
+  - **Text Input**: Single text area with Gujlish examples and helpful placeholders.
+  - **Voice Input**: Audio recording button with Gemini AI transcription, supporting WebM/Opus/WAV formats.
+  - **Transcription Flow**: Audio → Gemini STT → Text area population → Manual review → Extraction.
   - On submit, the app invokes an AI extraction chain that returns:
     - **amount** (required, numeric)
     - **category** (required, must be one of user-defined)
-    - **subcategory** (required, must be one of the selected category’s subcategories)
+    - **subcategory** (required, must be one of the selected category's subcategories)
     - **description** (required, text from the query)
-    - **datetime** (optional; if missing, use current date/time in the user’s timezone)
-  - If any required field cannot be extracted confidently, the chain returns `valid=false` with `missing_fields` and an explanatory `reason`. The UI shows an error and keeps the user’s text in the input for quick editing.
-  - On success, the extracted data is shown in a preview and saved to MongoDB.
+    - **datetime** (optional; if missing, use current date/time in the user's timezone)
+  - If any required field cannot be extracted confidently, the chain returns `valid=false` with `missing_fields` and an explanatory `reason`. The UI shows an error and keeps the user's text in the input for quick editing.
+  - On success, the extracted data is shown in a preview and saved to MongoDB with full audit logging.
+
+- **3.1.1 Expense Management (CRUD Operations)**
+
+  - **Read**: Display recent expenses with expandable details and action buttons.
+  - **Update**: Edit existing expenses through modal dialogs with form validation.
+  - **Delete**: Remove expenses with confirmation dialogs and soft delete options.
+  - **Create**: Enhanced expense creation with voice/text input and validation.
+  - All operations include audit logging and session state management.
 
 - **3.2 Categories and Subcategories Management**
 
@@ -272,16 +287,34 @@
 
 - **6.1 Expense Entry and Save**
 
-  1. User enters natural language text in the main text area with helpful placeholder examples.
-  2. User clicks "🔍 Extract & Save" or uses "🗑️ Clear" to reset.
-  3. App validates input (non-empty) and shows loading spinner during processing.
-  4. App fetches current categories/subcategories taxonomy from database.
-  5. App calls AI extraction chain with current provider/model, taxonomy, and user input.
-  6. AI processes the request and returns structured JSON result.
+  1. User has two input options:
+     - **Text Input**: Enters natural language text in the main text area with Gujlish placeholder examples.
+     - **Voice Input**: Clicks audio recording button, speaks expense description, clicks "📝 Transcribe" to convert audio to text.
+  2. User reviews transcribed/entered text and can edit if needed.
+  3. User clicks "🔍 Extract & Save" or uses "🗑️ Clear" to reset.
+  4. App validates input (non-empty) and shows loading spinner during processing.
+  5. App fetches current categories/subcategories taxonomy from database.
+  6. App calls AI extraction chain with current provider/model, taxonomy, and user input.
+  7. AI processes the request and returns structured JSON result.
      - If `valid=false`: Shows specific error message with missing fields, preserves user input for editing.
      - If `valid=true`: Displays extraction preview with amount, category, subcategory, description, and datetime.
-  7. On success: Saves to MongoDB, shows success toast, clears input, refreshes recent expenses list.
-  8. Recent expenses display shows last 5 entries with expandable details.
+  8. On success: Saves to MongoDB, shows success toast, clears input, refreshes recent expenses list.
+  9. Recent expenses display shows last 5 entries with expandable details and action buttons.
+
+- **6.1.1 Expense Editing and Deletion**
+
+  1. User views recent expenses with "✏️ Edit" and "🗑️ Delete" buttons (Admin only).
+  2. **Edit Flow**:
+     - User clicks "✏️ Edit" on any expense.
+     - Modal dialog opens with pre-populated form fields.
+     - User modifies amount, description, category, subcategory, or date/time.
+     - User clicks "💾 Save Changes" or "❌ Cancel".
+     - On save: Updates database, shows success message, refreshes expense list.
+  3. **Delete Flow**:
+     - User clicks "🗑️ Delete" on any expense.
+     - Confirmation dialog appears with expense details.
+     - User clicks "🗑️ Yes, Delete" or "❌ Cancel".
+     - On delete: Removes from database, shows success message, refreshes expense list.
 
 - **6.2 Manage Categories/Subcategories**
 
